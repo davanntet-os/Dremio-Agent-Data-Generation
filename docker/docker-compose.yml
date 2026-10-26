@@ -1,0 +1,61 @@
+# for interactive exploration; the pipeline itself uses Dremio REST v3 directly.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dataagent-postgres
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: dremio_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seed-password}
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dremio_admin -d ecommerce"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  dremio:
+    image: dremio/dremio-oss:26.0.0
+    container_name: dataagent-dremio
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DREMIO_JAVA_SERVER_MEMORY: 4096  # heap cap for the thin host (~10 GB RAM)
+    ports:
+      - "9047:9047"   # UI + REST API
+      - "31010:31010" # ODBC/JDBC (optional)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:9047/api/v3/catalog || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  dremio-mcp:
+    # Runs in the `mcp` profile only. Requires the repo cloned locally:
+    #   git clone https://github.com/dremio/dremio-mcp docker/dremio-mcp
+    profiles: ["mcp"]
+    build: ./dremio-mcp
+    container_name: dataagent-dremio-mcp
+    depends_on:
+      dremio:
+        condition: service_healthy
+    environment:
+      DREMIO_URI: http://dremio:9047
+      DREMIO_PAT: ${DREMIO_MCP_PAT:-}
+    command: ["dremio-mcp-server", "run"]
+    ports:
+      - "8008:8008"
+
+volumes:
+  pgdata:

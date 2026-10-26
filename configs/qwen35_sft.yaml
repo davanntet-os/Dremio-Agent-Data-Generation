@@ -1,0 +1,16 @@
+# LLaMA-Factory SFT config for Qwen3.5-0.8B on dataagent datasets.
+# Adjust model_name_or_path/template ids per the current HF release.
+model_name_or_path: Qwen/Qwen3.5-0.8B
+stage: sft
+template: qwen
+finetuning_type: full
+cutoff_len: 4096
+learning_rate: 1.0e-4
+num_train_epochs: 3
+batch_size: 8
+gradient_accumulation_steps: 2
+warmup_ratio: 0.03
+logging_steps: 10
+save_steps: 200
+eval_dataset: validation
+output_dir: models/qwen35-sft-dremio
